@@ -1,0 +1,37 @@
+FERRETERÍA — CÓMO CONFIGURAR (web + panel)
+==========================================
+
+REPOSITORIOS
+  • El de tu web (el que ya tienes)  → sube TODO lo de ferreteria-web.zip (reemplaza los archivos)
+  • Uno NUEVO para el panel, por ejemplo «ferreteria-admin» → sube ferreteria-admin.zip
+  En los dos: Settings → Pages → Branch: main → Save.
+
+1. REVISA TU firebaseConfig
+   Lo copié de tu foto. Abre firebase-config.js (en los DOS) y compara la línea apiKey con la de Firebase
+   (Configuración del proyecto → Tus apps). Si un solo carácter no coincide, no conecta.
+
+2. DIRECCIÓN DE TU WEB EN EL PANEL
+   En firebase-config.js del panel, «web:» debe ser la dirección real de tu tienda
+   (por ejemplo https://zikopro820.github.io/ferreteria-). Se usa en los enlaces de seguimiento.
+
+3. FIRESTORE Y REGLAS
+   Firebase → Firestore Database → Crear base de datos (si aún no existe) → Reglas → pega firestore.rules → Publicar.
+
+4. USUARIOS (Authentication → Users → Agregar usuario)
+   admin@ferreteriaronald.pe  (todo)  ·  ventas@ferreteriaronald.pe  (vendedor)
+   ¿Otros correos? Cámbialos en firebase-config.js (equipo) Y en firestore.rules.
+   Authentication → Configuración → Dominios autorizados → agrega zikopro820.github.io
+
+5. PRIMERA VEZ
+   Entra al panel como admin → «Ajustes de la web» → «Cargar ejemplos».
+   Luego cambia todo por tus datos: logo, WhatsApp, dirección, zonas de envío, QR de Yape/Plin,
+   cuentas bancarias, y en «Productos y stock» tus productos reales con foto, precio y stock.
+
+EL DÍA A DÍA
+  • Pedidos web: llega con sonido. Si pagó con Yape/Plin/transferencia, ves su captura → revisa tu app
+    → «Validar». Luego «Preparar» (baja el stock), «Enviar» o «Listo para recoger», y «Entregado».
+    En cada paso se abre WhatsApp con el mensaje listo para el cliente.
+  • Contra entrega: al marcar «Entregado» eliges cómo pagó y entra a Caja.
+  • Venta en tienda: caja rápida para lo que vendes en el mostrador (ticket de 80 mm o nota A5).
+  • El cliente sigue su pedido en la web con su código (página «Mi pedido»).
+  • La nota de venta NO reemplaza la boleta o factura electrónica de SUNAT.
