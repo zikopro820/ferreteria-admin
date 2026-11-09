@@ -189,3 +189,10 @@ h1, h2 { font-family: "Manrope", system-ui, sans-serif; letter-spacing: -.02em; 
 .dias i { width: 100%; background: var(--acc); border-radius: 4px 4px 0 0; } .dias small { font-size: .66rem; color: var(--muted); height: 12px; }
 .bar i { background: linear-gradient(90deg, #15171c, #3a3d45); }
 @media (max-width: 1000px) { .pos { grid-template-columns: 1fr; } .pos-c { position: static; } }
+
+/* Historial de recibos por cliente */
+.tbl tr.clk { cursor: pointer; } .tbl tr.clk:hover td { background: #fffbea; }
+.nw { white-space: nowrap; }
+.hc-top { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+.hc-top div { background: #f6f6f6; border-radius: 10px; padding: 10px 12px; } .hc-top small { display: block; color: #777; font-size: .78rem; } .hc-top b { font-size: 1.05rem; }
+@media (max-width: 640px) { .hc-top { grid-template-columns: 1fr 1fr; } }

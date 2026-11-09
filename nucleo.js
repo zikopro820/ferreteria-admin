@@ -157,26 +157,27 @@ async function pdfNota(p, ticket) {
     if (logoPDF(doc, 31, 4, 18)) y = 27;
     doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text(NOMBRE(), 40, y, { align: "center" }); y += 5;
     doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); [aj.direccion, `Tel. ${aj.telefono || ""}`, aj.ruc ? `RUC ${aj.ruc}` : ""].filter(Boolean).forEach(t => { doc.text(String(t), 40, y, { align: "center", maxWidth: 70 }); y += 3.8; });
-    y += 2; doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.text(`NOTA DE VENTA ${p.codigo || p.id}`, 40, y, { align: "center" }); y += 4.5;
+    y += 2; doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.text(`RECIBO DE COMPRA ${p.codigo || p.id}`, 40, y, { align: "center" }); y += 4.5;
     doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.text(new Date(p.creado || Date.now()).toLocaleString("es-PE"), 40, y, { align: "center" }); y += 4;
     if (p.nombre) { doc.text(`Cliente: ${p.nombre}${p.doc ? " · " + p.doc : ""}`, 5, y, { maxWidth: 70 }); y += 4; }
+    if (p.boleta) { doc.setFont("helvetica", "bold"); doc.text(`${p.comprobante || "Boleta"} electrónica N° ${p.boleta}`, 40, y, { align: "center" }); doc.setFont("helvetica", "normal"); y += 4; }
     doc.setLineDashPattern([1, 1], 0); doc.line(5, y, 75, y); y += 4;
     items.forEach(i => { doc.setFontSize(8); doc.text(doc.splitTextToSize(`${i.cant} x ${i.n}`, 50)[0], 5, y); doc.text(S(i.precio * i.cant), 75, y, { align: "right" }); y += 4; doc.setFontSize(6.8); doc.setTextColor(110); doc.text(`${S(i.precio)} c/u`, 8, y); doc.setTextColor(0); y += 5; });
     doc.line(5, y, 75, y); y += 5;
     [["Subtotal", p.subtotal ?? p.total], ...(p.envio ? [["Envío", p.envio]] : []), ...(p.descuento ? [["Descuento", -p.descuento]] : [])].forEach(([a, b]) => { doc.setFontSize(8); doc.text(a, 5, y); doc.text(S(b), 75, y, { align: "right" }); y += 4.2; });
     doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text("TOTAL", 5, y + 1); doc.text(S(p.total), 75, y + 1, { align: "right" }); y += 7;
     doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(`Pago: ${p.pago || ""}${p.banco ? " " + p.banco : ""}`, 5, y); y += 4; if (p.vuelto) { doc.text(`Recibido ${S(p.recibido)} · Vuelto ${S(p.vuelto)}`, 5, y); y += 4; }
-    doc.setFontSize(7); doc.text("¡Gracias por su compra!", 40, y + 3, { align: "center" }); doc.text("No es comprobante de pago SUNAT", 40, y + 6.5, { align: "center" });
+    doc.setFontSize(7); doc.text("¡Gracias por su compra!", 40, y + 3, { align: "center" }); doc.text("Este recibo no reemplaza la boleta o factura electrónica.", 40, y + 6.5, { align: "center", maxWidth: 72 });
     return doc.save(`Ticket-${p.codigo || p.id}.pdf`);
   }
   const doc = new J({ unit: "mm", format: "a5" }), W = 148;
   doc.setFillColor(21, 23, 28); doc.rect(0, 0, W, 26, "F"); doc.setFillColor(255, 200, 26); doc.rect(0, 26, W, 2, "F");
   const X = logoPDF(doc, 9, 4, 18) ? 32 : 10; doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.text(NOMBRE(), X, 12);
   doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(`${aj.direccion || ""} · Tel. ${aj.telefono || ""}${aj.ruc ? " · RUC " + aj.ruc : ""}`, X, 18, { maxWidth: W - X - 8 });
-  doc.setTextColor(25); doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text("NOTA DE VENTA", 10, 38); doc.setFontSize(10); doc.text(p.codigo || p.id, W - 10, 38, { align: "right" });
+  doc.setTextColor(25); doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text("RECIBO DE COMPRA", 10, 38); doc.setFontSize(10); doc.text(p.codigo || p.id, W - 10, 38, { align: "right" });
   doc.setFont("helvetica", "normal"); doc.setFontSize(9); let y = 45;
   [["Fecha", new Date(p.creado || Date.now()).toLocaleString("es-PE")], ["Cliente", `${p.nombre || "Cliente"}${p.doc ? " · " + p.doc : ""}`], ["Celular", p.celular || "—"],
-    ["Entrega", p.entrega === "domicilio" ? `Envío · ${p.zona || ""} · ${p.direccion || ""}${p.referencia ? " (" + p.referencia + ")" : ""}` : p.entrega === "recojo" ? "Recojo en tienda" : "Venta en tienda"], ["Comprobante", p.comprobante || "—"]]
+    ["Entrega", p.entrega === "domicilio" ? `Envío · ${p.zona || ""} · ${p.direccion || ""}${p.referencia ? " (" + p.referencia + ")" : ""}` : p.entrega === "recojo" ? "Recojo en tienda" : "Venta en tienda"], ["Comprobante", (p.comprobante || "—") + (p.boleta ? ` electrónica N° ${p.boleta}` : " (pendiente de emitir)")], ["Estado", ({ "por-validar": "Pago en revisión", nuevo: "Confirmado", preparando: "Preparando", enviado: "En camino", entregado: "Entregado", anulado: "Anulado", rechazado: "Rechazado" })[p.estado] || p.estado || "—"]]
     .forEach(([a, b]) => { doc.setFont("helvetica", "bold"); doc.text(a, 10, y); doc.setFont("helvetica", "normal"); const l = doc.splitTextToSize(String(b), W - 48); doc.text(l, 38, y); y += 5.2 * l.length; });
   y += 3; doc.setFillColor(244, 245, 247); doc.rect(10, y - 4, W - 20, 7, "F"); doc.setFont("helvetica", "bold"); doc.setFontSize(8.5);
   doc.text("Cant.", 12, y); doc.text("Producto", 26, y); doc.text("P. unit.", 104, y, { align: "right" }); doc.text("Importe", W - 12, y, { align: "right" }); y += 7; doc.setFont("helvetica", "normal");
@@ -185,6 +186,7 @@ async function pdfNota(p, ticket) {
   [["Subtotal", p.subtotal ?? p.total], ...(p.envio ? [["Envío", p.envio]] : []), ...(p.descuento ? [["Descuento", -p.descuento]] : [])].forEach(([a, b]) => { doc.text(a, 104, y, { align: "right" }); doc.text(S(b), W - 12, y, { align: "right" }); y += 5; });
   doc.setFont("helvetica", "bold"); doc.setFontSize(11.5); doc.text("TOTAL", 104, y + 1, { align: "right" }); doc.text(S(p.total), W - 12, y + 1, { align: "right" }); y += 9;
   doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.text(`Pago: ${p.pago || ""}${p.banco ? " " + p.banco : ""}${p.operacion ? " · Op. " + p.operacion : ""}`, 10, y);
-  doc.setFontSize(7.5); doc.setTextColor(120); doc.text("Este documento no reemplaza la boleta o factura electrónica.", 10, 200);
-  doc.save(`Nota-${p.codigo || p.id}.pdf`);
+  doc.setFontSize(7.5); doc.setTextColor(120); try { const q = await qrCanvas(linkPedido(p.codigo || p.id), 200, "#111"); if (y > 160) { doc.addPage(); y = 15; } doc.addImage(q.toDataURL(), "PNG", W - 34, y + 6, 24, 24); doc.setFontSize(7); doc.setTextColor(120); doc.text("Ver pedido en línea", W - 22, y + 33, { align: "center" }); } catch (e) {}
+  doc.setFontSize(7.5); doc.setTextColor(90); doc.setFont("helvetica", "bold"); doc.text("Este recibo no reemplaza la boleta o factura electrónica.", 10, 200);
+  doc.save(`Recibo-${p.codigo || p.id}.pdf`);
 }

@@ -105,10 +105,10 @@ VIEWS.pedidos = async () => {
       return `<article class="card ped ${esc(p.estado)}"><div class="ped-i">${ico(p.entrega === "recojo" ? "store" : "truck")}</div><div class="ped-b">
         <div class="ped-h"><b>${esc(p.nombre)}</b><span class="mono">${esc(p.codigo || p.id)}</span><span class="muted">${hace(p.creado)}</span>${estP(p.estado, p)}</div>
         <p>${(p.items || []).map(i => `<span class="it">${i.cant}× ${esc(i.n)}</span>`).join("")}</p>
-        <p><b>${S(p.total)}</b>${p.envio ? ` <span class="muted">(incl. envío ${S(p.envio)})</span>` : ""} · ${esc(p.pago)}${p.banco ? " " + esc(p.banco) : ""}${p.operacion ? ` · op. ${esc(p.operacion)}` : ""}${p.pagado ? ` · <span class="st ok">Pagado</span>` : ""}</p>
+        <p><b>${S(p.total)}</b>${p.envio ? ` <span class="muted">(incl. envío ${S(p.envio)})</span>` : ""} · ${esc(p.pago)}${p.banco ? " " + esc(p.banco) : ""}${p.operacion ? ` · op. ${esc(p.operacion)}` : ""}${p.pagado ? ` · <span class="st ok">Pagado</span>` : ""}${p.boleta ? ` · <span class="st ok">🧾 ${esc(p.boleta)}</span>` : ""}</p>
         <p class="muted">${p.entrega === "domicilio" ? `🚚 ${esc(p.zona || "")} · ${esc(p.direccion || "")}${p.referencia ? " · " + esc(p.referencia) : ""}` : "🏪 Recoge en tienda"} · 📱 ${esc(p.celular)} · ${esc(p.comprobante || "")}${p.doc ? " " + esc(p.doc) : ""}</p>
         ${al.map(([c, t]) => `<div class="alert ${c} sm">${ico("alert")} ${t}</div>`).join("")}
-        <div class="acts-g">${accionesPedido(p)}<button class="btn btn-light btn-sm" data-pa="pdf|${esc(p.id)}">${ico("file")} Nota</button><button class="btn btn-wa btn-sm" data-pa="wa|${esc(p.id)}">${ico("wa")}</button></div></div></article>`; }).join("") || vacio("No hay pedidos aquí.")}</div>`;
+        <div class="acts-g">${accionesPedido(p)}<button class="btn btn-light btn-sm" data-pa="pdf|${esc(p.id)}">${ico("file")} Recibo</button><button class="btn btn-light btn-sm" data-pa="boleta|${esc(p.id)}">🧾 ${p.boleta ? "Editar N° " + esc(p.comprobante || "boleta") : "N° de " + esc(p.comprobante || "boleta")}</button><button class="btn btn-wa btn-sm" data-pa="wa|${esc(p.id)}">${ico("wa")}</button></div></div></article>`; }).join("") || vacio("No hay pedidos aquí.")}</div>`;
   $("#view").onclick = async e => {
     const t = e.target.closest("[data-pt]"); if (t) { PT = t.dataset.pt; return VIEWS.pedidos(); }
     const b = e.target.closest("[data-pa]"); if (!b) return; const [a, id] = b.dataset.pa.split("|"), p = todos.find(x => x.id === id); if (p) accionPedido(a, p);
@@ -125,6 +125,9 @@ const msgCliente = (p, t) => `Hola ${String(p.nombre || "").split(" ")[0]} 👋 
 async function accionPedido(a, p) {
   const id = p.id, upd = data => ({ op: "set", col: "pedidos", id, data: { ...data, actualizado: new Date().toISOString(), por: YO().nombre } }), fin = async (ops, msg, wa) => { await DB.batch(ops); toast(msg); if (wa) abrirWA(p.celular, wa); vigilar(); refrescar(); };
   if (a === "pdf") return pdfNota(p);
+  if (a === "boleta") return modal(`${p.comprobante || "Boleta"} electrónica · ${p.codigo || id}`, `<p class="muted">Cuando emitas la ${esc((p.comprobante || "boleta").toLowerCase())} en SUNAT (o en tu sistema de facturación), escribe aquí su número. El cliente lo verá en su recibo y en «Mis compras».</p>
+      <div class="g2">${fld("comprobante", "Tipo", p.comprobante || "Boleta", { opts: ["Boleta", "Factura"] })}${fld("boleta", "Número (serie-correlativo)", p.boleta || "", { ph: "Ej. B001-000123" })}</div>`, async d =>
+    fin([upd({ comprobante: d.comprobante, boleta: String(d.boleta || "").trim().toUpperCase().slice(0, 20) })], d.boleta ? "Número guardado" : "Número borrado"), "Guardar");
   if (a === "wa") return abrirWA(p.celular, msgCliente(p, "Te escribimos sobre tu pedido."));
   if (a === "validar") { const c = await DB.get("capturas", id);
     return modal(`Validar pago · ${p.codigo || id}`, `${c && c.captura ? `<img class="zoom" src="${esc(c.captura)}" alt="Captura del pago">` : `<p class="muted">Sin imagen de captura.</p>`}
@@ -286,15 +289,29 @@ VIEWS.caja = async () => {
 /* ================= CLIENTES ================= */
 let CQ = "";
 VIEWS.clientes = async () => {
-  const peds = (await DB.list("pedidos")).filter(p => p.celular && !["anulado", "rechazado"].includes(p.estado)), M = {};
-  peds.forEach(p => { const k = String(p.celular).replace(/\D/g, "").slice(-9); const c = M[k] || (M[k] = { nombre: p.nombre, celular: p.celular, doc: p.doc, n: 0, total: 0, ult: "" }); c.n++; c.total += +p.total || 0; if (String(p.creado) > c.ult) { c.ult = p.creado; c.nombre = p.nombre; c.doc = p.doc || c.doc; } });
+  const todos = (await DB.list("pedidos")).filter(p => p.celular), peds = todos.filter(p => !["anulado", "rechazado"].includes(p.estado)), M = {}, kc = cel => String(cel).replace(/\D/g, "").slice(-9);
+  peds.forEach(p => { const k = kc(p.celular); const c = M[k] || (M[k] = { k, nombre: p.nombre, celular: p.celular, doc: p.doc, n: 0, total: 0, ult: "" }); c.n++; c.total += +p.total || 0; if (String(p.creado) > c.ult) { c.ult = p.creado; c.nombre = p.nombre; c.doc = p.doc || c.doc; } });
   const q = CQ.toLowerCase(), l = Object.values(M).filter(c => !q || [c.nombre, c.celular, c.doc].join(" ").toLowerCase().includes(q)).sort((a, b) => b.total - a.total);
   $("#view").innerHTML = topBar("Clientes", "Quienes te compraron por la web o dejaron su celular en tienda. Ordenados por lo que más compran.", `<input class="q" id="cq" placeholder="Buscar nombre, celular o RUC" value="${esc(CQ)}">`) +
     `<section class="card"><div class="tbl-w"><table class="tbl"><thead><tr><th>Cliente</th><th>Celular</th><th>DNI / RUC</th><th>Compras</th><th class="r">Total</th><th>Última</th><th></th></tr></thead><tbody>
-    ${l.slice(0, 300).map(c => `<tr><td><b>${esc(c.nombre)}</b>${c.n > 1 ? ` <span class="st ok">Frecuente</span>` : ""}</td><td>${esc(c.celular)}</td><td>${esc(c.doc || "")}</td><td>${c.n}</td><td class="r">${S(c.total)}</td><td>${fmtF(c.ult)}</td><td><button class="btn btn-wa btn-sm" data-wa="${esc(c.celular)}|${esc(c.nombre)}">${ico("wa")}</button></td></tr>`).join("") || `<tr><td colspan="7" class="muted">Aún no hay clientes.</td></tr>`}</tbody></table></div></section>`;
+    ${l.slice(0, 300).map(c => `<tr class="clk" data-cli="${esc(c.k)}" title="Ver sus compras y recibos"><td><b>${esc(c.nombre)}</b>${c.n > 1 ? ` <span class="st ok">Frecuente</span>` : ""}</td><td>${esc(c.celular)}</td><td>${esc(c.doc || "")}</td><td>${c.n}</td><td class="r">${S(c.total)}</td><td>${fmtF(c.ult)}</td><td class="nw"><button class="btn btn-light btn-sm" data-cli="${esc(c.k)}">${ico("file")} Recibos</button> <button class="btn btn-wa btn-sm" data-wa="${esc(c.celular)}|${esc(c.nombre)}">${ico("wa")}</button></td></tr>`).join("") || `<tr><td colspan="7" class="muted">Aún no hay clientes.</td></tr>`}</tbody></table></div></section>`;
   $("#cq").addEventListener("change", e => { CQ = e.target.value; VIEWS.clientes(); });
-  $("#view").onclick = e => { const b = e.target.closest("[data-wa]"); if (b) { const [cel, n] = b.dataset.wa.split("|"); abrirWA(cel, `Hola ${n.split(" ")[0]} 👋 Te saluda *${NOMBRE()}*. `); } };
+  $("#view").onclick = e => { const b = e.target.closest("[data-wa]"); if (b) { const [cel, n] = b.dataset.wa.split("|"); return abrirWA(cel, `Hola ${n.split(" ")[0]} 👋 Te saluda *${NOMBRE()}*. `); }
+    const r = e.target.closest("[data-cli]"); if (r && M[r.dataset.cli]) historialCliente(M[r.dataset.cli], todos.filter(p => kc(p.celular) === r.dataset.cli)); };
 };
+function historialCliente(c, ps) {
+  ps = ps.sort((a, b) => String(b.creado).localeCompare(String(a.creado)));
+  const ok = ps.filter(p => !["anulado", "rechazado"].includes(p.estado));
+  modal(`Compras de ${c.nombre}`, `<div class="hc-top"><div><small>Celular</small><b>${esc(c.celular)}</b></div><div><small>DNI / RUC</small><b>${esc(c.doc || "—")}</b></div><div><small>Compras</small><b>${ok.length}</b></div><div><small>Total comprado</small><b>${S(ok.reduce((a, p) => a + (+p.total || 0), 0))}</b></div></div>
+    <div class="tbl-w"><table class="tbl"><thead><tr><th>Fecha</th><th>Código</th><th>Productos</th><th class="r">Total</th><th>Estado</th><th>Comprobante</th><th></th></tr></thead><tbody>
+    ${ps.map(p => `<tr><td class="nw">${new Date(p.creado).toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric" })}<br><small class="muted">${new Date(p.creado).toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}</small></td>
+      <td class="mono nw">${esc(p.codigo || p.id)}<br><small class="muted">${p.origen === "tienda" ? "Tienda" : "Web"}</small></td><td><small>${(p.items || []).map(i => `${i.cant}× ${esc(i.n)}`).join("<br>")}</small></td><td class="r nw"><b>${S(p.total)}</b></td><td>${estP(p.estado, p)}</td>
+      <td>${p.boleta ? `<b>${esc(p.boleta)}</b>` : `<span class="muted">${esc(p.comprobante || "Boleta")} sin N°</span>`}<br><button class="btn btn-light btn-sm" data-hb="${esc(p.id)}">🧾 ${p.boleta ? "Editar" : "Poner N°"}</button></td>
+      <td><button class="btn btn-pri btn-sm" data-hp="${esc(p.id)}">${ico("file")} PDF</button></td></tr>`).join("")}</tbody></table></div>`, null, "", { wide: true, alAbrir: F => {
+    F.onclick = e => { const b = e.target.closest("[data-hp],[data-hb]"); if (!b) return; e.preventDefault(); const p = ps.find(x => x.id === (b.dataset.hp || b.dataset.hb)); if (!p) return;
+      if (b.dataset.hp) pdfNota(p); else accionPedido("boleta", p); };
+  } });
+}
 
 /* ================= MENSAJES ================= */
 VIEWS.mensajes = async () => {
