@@ -22,6 +22,7 @@ service cloud.firestore {
     match /ajustes/{id}    { allow read: if true; allow write: if admin(); }
     match /categorias/{id} { allow read: if true; allow write: if admin(); }
     match /productos/{id}  { allow read: if true; allow write: if equipo(); }
+    match /fotos_prod/{id} { allow read: if true; allow write: if equipo(); }   // fotos extra de cada producto
 
     // ---------- Pedidos ----------
     match /pedidos/{id} {

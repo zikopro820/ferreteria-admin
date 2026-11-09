@@ -214,25 +214,35 @@ VIEWS.productos = async () => {
         await DB.batch(ops); toast(`Stock de ${p.nombre}: ${n}`); VIEWS.productos(); }, "Reponer"); }
   };
 };
-function formProducto(p) {
+async function formProducto(p) {
+  let FOTOS = [p?.foto, ...(p ? ((await DB.get("fotos_prod", p.id)) || {}).fotos || [] : [])].filter(Boolean).slice(0, 4);
   modal(p ? "Editar producto" : "Nuevo producto", `<div class="g2">
-    <div class="full"><span class="lbl">Foto</span><div class="foto-up"><span id="pPrev" class="p-prev" style="background-image:url('${esc(IMG(p?.foto, 300))}')"></span>
-      <label class="btn btn-light btn-sm">${ico("camera")} Subir foto<input type="file" accept="image/*" id="pFile" hidden></label><input type="hidden" name="foto" value="${esc(p?.foto || "")}">
-      <input class="q" id="pUrl" placeholder="…o pega el enlace de una foto (https://…)" style="flex:1;min-width:200px"><small class="muted">Foto cuadrada y con fondo claro. Se achica sola.</small></div></div>
+    <div class="full"><span class="lbl">Fotos (hasta 4 · la ⭐ es la principal, la que se ve en el catálogo)</span><div class="gal-ed" id="galEd"></div>
+      <div class="foto-up" style="margin-top:8px"><input class="q" id="pUrl" placeholder="…o pega el enlace de una foto (https://…) y pulsa Agregar" style="flex:1;min-width:200px"><button type="button" class="btn btn-light btn-sm" id="pUrlAdd">Agregar enlace</button>
+      <small class="muted">Fotos cuadradas, de frente y con fondo claro. Se achican solas. Muestra el producto por varios lados.</small></div></div>
     ${fld("nombre", "Nombre", p?.nombre || "", { req: true, full: true })}${fld("cat", "Categoría", p?.cat || CAT.cats[0]?.id, { opts: CAT.cats.map(c => [c.id, c.nombre]) })}${fld("unidad", "Se vende por", p?.unidad || "unidad", { ph: "unidad, galón, rollo, bolsa, ciento…" })}
     ${fld("precio", "Precio (S/)", p?.precio ?? "", { type: "number", req: true, extra: 'min="0" step="0.01"' })}${fld("antes", "Precio anterior (si está en oferta)", p?.antes ?? "", { type: "number", extra: 'min="0" step="0.01"' })}
     ${fld("stock", "Stock", p ? (p.stock ?? "") : 10, { type: "number", extra: 'min="0"', help: "Vacío = no controlar stock" })}${fld("badge", "Etiqueta", p?.badge || "", { opts: [["", "Ninguna"], "Más vendido", "Oferta", "Nuevo"] })}
     ${fld("desc", "Descripción", p?.desc || "", { type: "textarea", full: true, rows: 2 })}${fld("specs", "Características (una por línea)", (p?.specs || []).join("\n"), { type: "textarea", full: true, rows: 4 })}
     ${fld("activo", "Visible en la tienda online", p ? p.activo !== false : true, { type: "checkbox", full: true })}</div>${p ? `<button type="button" class="btn btn-light danger btn-sm" id="delP">${ico("trash")} Eliminar producto</button>` : ""}`, async d => {
-    const id = p?.id || "p" + Date.now().toString(36), foto = $("#pUrl").value.trim() || d.foto;
+    const id = p?.id || "p" + Date.now().toString(36), u = $("#pUrl").value.trim();
+    if (/^https:\/\//.test(u) && FOTOS.length < 4 && !FOTOS.includes(u)) FOTOS.push(u);
+    const foto = FOTOS[0] || "";
     const data = { nombre: d.nombre, cat: d.cat, unidad: d.unidad || "unidad", precio: +d.precio, antes: d.antes === "" ? null : +d.antes, stock: d.stock === "" ? null : Math.max(0, +d.stock), badge: d.badge, desc: d.desc,
       specs: d.specs.split("\n").map(x => x.trim()).filter(Boolean), activo: d.activo, foto, orden: p?.orden ?? CAT.prods.length, actualizado: new Date().toISOString() };
     if (data.antes && data.antes <= data.precio) { toast("El precio anterior debe ser mayor al precio actual", true); return false; }
     if (JSON.stringify(data).length > 400000) { toast("La foto pesa demasiado", true); return false; }
-    await DB.set("productos", id, data, false); toast("Producto guardado · ya se ve en la tienda"); VIEWS.productos(); }, "Guardar", { wide: true, alAbrir: F => {
-    $("#pFile").addEventListener("change", async e => { const f = e.target.files[0]; if (!f) return; const u = await redimensionar(f, 600, .72); $("[name=foto]", F).value = u; $("#pUrl").value = ""; $("#pPrev").style.backgroundImage = `url('${u}')`; });
-    $("#pUrl").addEventListener("change", e => { if (/^https:\/\//.test(e.target.value)) $("#pPrev").style.backgroundImage = `url('${e.target.value}')`; });
-    $("#delP")?.addEventListener("click", async () => { if (!confirm(`¿Eliminar «${p.nombre}»?`)) return; await DB.del("productos", p.id); cerrarModal(); toast("Producto eliminado"); VIEWS.productos(); }); } });
+    data.nFotos = FOTOS.length;
+    if (FOTOS.slice(1).join("").length > 900000) { toast("Las fotos extra pesan demasiado", true); return false; }
+    await DB.batch([{ op: "set", col: "productos", id, data, merge: false }, { op: "set", col: "fotos_prod", id, data: { fotos: FOTOS.slice(1) }, merge: false }]);
+    toast("Producto guardado · ya se ve en la tienda"); VIEWS.productos(); }, "Guardar", { wide: true, alAbrir: F => {
+    const pintarG = () => { $("#galEd").innerHTML = FOTOS.map((f, k) => `<div class="g-th ${k ? "" : "main"}" style="background-image:url('${esc(IMG(f, 300))}')">${k ? `<button type="button" data-gp="${k}" title="Hacer principal" aria-label="Hacer principal">⭐</button>` : `<span>Principal</span>`}<button type="button" data-gx="${k}" title="Quitar" aria-label="Quitar foto">×</button></div>`).join("")
+      + (FOTOS.length < 4 ? `<label class="g-add">${ico("camera")}<span>Subir fotos</span><input type="file" accept="image/*" multiple hidden id="gFile"></label>` : ""); };
+    pintarG();
+    $("#galEd").addEventListener("click", e => { const x = e.target.closest("[data-gx]"), pr = e.target.closest("[data-gp]"); if (x) { FOTOS.splice(+x.dataset.gx, 1); pintarG(); } if (pr) { FOTOS.unshift(FOTOS.splice(+pr.dataset.gp, 1)[0]); pintarG(); } });
+    $("#galEd").addEventListener("change", async e => { if (e.target.id !== "gFile") return; const fs = [...e.target.files].slice(0, 4 - FOTOS.length); for (const [k, f] of fs.entries()) FOTOS.push(await redimensionar(f, !FOTOS.length && !k ? 600 : 900, .72)); pintarG(); });
+    $("#pUrlAdd").addEventListener("click", () => { const u = $("#pUrl").value.trim(); if (!/^https:\/\//.test(u)) return toast("Pega un enlace que empiece con https://", true); if (FOTOS.length >= 4) return toast("Máximo 4 fotos", true); FOTOS.push(u); $("#pUrl").value = ""; pintarG(); });
+    $("#delP")?.addEventListener("click", async () => { if (!confirm(`¿Eliminar «${p.nombre}»?`)) return; await DB.batch([{ op: "del", col: "productos", id: p.id }, { op: "del", col: "fotos_prod", id: p.id }]); cerrarModal(); toast("Producto eliminado"); VIEWS.productos(); }); } });
 }
 
 /* ================= CATEGORÍAS ================= */
